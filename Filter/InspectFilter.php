@@ -208,10 +208,10 @@ final readonly class InspectFilter implements QueryFilter
     /**
      * The set form: one bound list, expanded by DBAL into an `IN` of equalities.
      *
-     * Equality is the whole point. It rides the store's correlation expression index exactly as the
-     * scalar form does, measured at a bitmap index scan over a bound list, where a prefix or a range
-     * would fall back to a full scan and, on a database whose collation is not byte-ordered, would
-     * also be plain wrong.
+     * Equality is the whole point. The dynamic path reaches an expression index only when a custom
+     * plan folds the bound path into the indexed expression. A generic plan keeps the path opaque and
+     * cannot match that index. A prefix or a range would fall back to a full scan and, on a database
+     * whose collation is not byte-ordered, would also be plain wrong.
      */
     private function applyAnyCondition(QueryBuilder $qb, JsonAnyCondition $condition, int $index): void
     {

@@ -231,12 +231,13 @@ final class InspectFilterTest extends TestCase
      * `getSQL()` renders PostgreSQL syntax with zero database I/O; a true unit test.
      */
     #[Test]
-    public function a_set_condition_renders_the_in_form_on_the_index_matching_spelling(): void
+    public function a_set_condition_renders_the_bound_dynamic_path_form(): void
     {
         // the ANY branch, which no recipe composes any more since the correlation predicate moved to
         // the store layer. The rendering is still the carrier's whole reason to exist, and it must
-        // stay the `#>> string_to_array(...)` form: the `->>` key form returns identical text and
-        // matches the store's expression index NOTHING, scanning while every row still looks right.
+        // stay the `#>> string_to_array(...)` form rather than the semantically equal `->>` key form.
+        // Only a custom plan can fold the bound path and match an expression index; a generic plan
+        // keeps the path opaque.
         $qb = $this->queryBuilder();
 
         new InspectFilter(

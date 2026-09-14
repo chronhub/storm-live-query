@@ -6,6 +6,7 @@ namespace Storm\LiveQuery\Tests\Console;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Storm\Chronicler\Directory\StreamExistence;
@@ -32,6 +33,69 @@ use Symfony\Component\Console\Tester\CommandTester;
  */
 final class InspectEventsCommandTest extends TestCase
 {
+    #[Test]
+    #[DataProvider('validTimeBounds')]
+    public function accepted_time_bounds_are_bound_as_exact_utc_instants(string $option, string $value, string $parameter, string $expected): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $command = new InspectEventsCommand(
+            $this->createStub(StreamReader::class),
+            $connection,
+            $this->createStub(EventTypeMapper::class),
+            new RecipeRegistry([]),
+            $this->clock(),
+            $this->createStub(StreamExistence::class),
+        );
+        $tester = new CommandTester($command);
+        $this->assertSame(Command::SUCCESS, $tester->execute([$option => $value, '--timeout' => '0', '--dump-sql' => true]));
+        $this->assertStringContainsString($parameter.' = '.$expected, $tester->getDisplay());
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string, string}>
+     */
+    public static function validTimeBounds(): iterable
+    {
+        yield 'start of day' => ['--since', '2026-05-01', ':afterTime', '2026-05-01T00:00:00.000000+00:00'];
+        yield 'end of day' => ['--until', '2026-05-01', ':beforeTime', '2026-05-01T23:59:59.999999+00:00'];
+        yield 'minutes' => ['--since', '2026-05-01 10:30', ':afterTime', '2026-05-01T10:30:00.000000+00:00'];
+        yield 'seconds' => ['--since', '2026-05-01 10:30:12', ':afterTime', '2026-05-01T10:30:12.000000+00:00'];
+        yield 'space and offset' => ['--since', '2026-05-01 10:30:12+02:00', ':afterTime', '2026-05-01T08:30:12.000000+00:00'];
+        yield 'ISO seconds' => ['--since', '2026-05-01T10:30:12', ':afterTime', '2026-05-01T10:30:12.000000+00:00'];
+        yield 'ISO offset' => ['--since', '2026-05-01T10:30:12+02:00', ':afterTime', '2026-05-01T08:30:12.000000+00:00'];
+        yield 'microseconds' => ['--since', '2026-05-01 10:30:12.123456', ':afterTime', '2026-05-01T10:30:12.123456+00:00'];
+        yield 'ISO microseconds' => ['--since', '2026-05-01T10:30:12.123456+02:00', ':afterTime', '2026-05-01T08:30:12.123456+00:00'];
+    }
+
+    /**
+     * @param  array<string, string|bool>  $options
+     */
+    #[Test]
+    #[DataProvider('invalidOptionCombinations')]
+    public function conflicting_or_invalid_options_fail_before_a_read(array $options, string $diagnostic): void
+    {
+        $tester = new CommandTester($this->command());
+        $this->assertSame(Command::INVALID, $tester->execute($options));
+        $this->assertStringContainsString($diagnostic, $tester->getDisplay());
+        $this->assertStringNotContainsString('Unknown recipe', $tester->getDisplay());
+    }
+
+    /**
+     * @return iterable<string, array{array<string, string|bool>, string}>
+     */
+    public static function invalidOptionCombinations(): iterable
+    {
+        yield 'out and SQL' => [['--out' => '/tmp/unwritten-inspection.json', '--dump-sql' => true], '--out/--export require a read'];
+        yield 'export and explain' => [['--export' => true, '--explain' => true], '--out/--export require a read'];
+        yield 'stream and recipe' => [['--stream' => 'orders', '--recipe' => 'trace'], 'cannot be combined'];
+        yield 'rolled-over day' => [['--since' => '2026-02-30'], 'Invalid --since'];
+        yield 'year zero' => [['--since' => '0000-01-01'], 'Invalid --since'];
+        yield 'invalid since' => [['--since' => 'not a date'], '--since'];
+        yield 'invalid until' => [['--until' => 'not a date'], '--until'];
+        yield 'non numeric limit' => [['--limit' => 'abc'], 'Invalid --limit'];
+        yield 'excessive limit' => [['--limit' => '1000000000'], 'exceeds the maximum'];
+    }
+
     #[Test]
     public function a_malformed_derived_stream_name_is_reported_and_fails_before_any_read(): void
     {

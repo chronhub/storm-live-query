@@ -254,7 +254,9 @@ final class InspectEventsCommand extends Command
      * guard, not a sandbox; `READ ONLY` does not block a row lock `SELECT ... FOR UPDATE` or a
      * side-effecting function such as `pg_advisory_lock`, `dblink`, `pg_read_file`, which the
      * fragment author owns. Recipes are DI-discovered trusted PHP, not raw CLI input, and reject
-     * `--sql` anyway, so they never need the guard.
+     * `--sql` anyway, so they never need the guard. The transaction covers the read alone: the
+     * cursor is drained inside it and it is released before the first byte is rendered, so an
+     * output that stalls, a slow pipe or a paused pager, never holds it open.
      *
      * A page that fills the limit is indistinguishable from a complete result, so the renderer's
      * count is the truncation signal: a count equal to `effectiveLimit` warns on STDERR, never on
@@ -283,6 +285,16 @@ final class InspectEventsCommand extends Command
                 $events = $this->byWallClock($events); // re-sorted ONCE: screen and document show the same order
             }
 
+            if ($plan->rawSql) {
+                // drained INSIDE the guard: the reader's generator runs its SQL at the first iteration, so
+                // releasing the transaction over a still-lazy cursor would run the untrusted fragment
+                // outside READ ONLY, the reverse of the guard. Released BEFORE the render: `pdo_pgsql`
+                // buffers the whole result client-side anyway and the hard LIMIT bounds it, so nothing is
+                // gained by rendering under the transaction and a stalled output would hold it open
+                $events = is_array($events) ? $events : iterator_to_array($events, preserve_keys: false);
+                $this->connection->rollBack(); // read-only, nothing to commit
+            }
+
             $document = null;
 
             if ($plan->emitsDocument() || $renderer instanceof JsonRenderer) {
@@ -295,10 +307,6 @@ final class InspectEventsCommand extends Command
             $count = $document !== null && $renderer instanceof JsonRenderer
                 ? $renderer->renderDocument($document, $output)
                 : $renderer->render($events, $output);
-
-            if ($plan->rawSql) {
-                $this->connection->rollBack(); // read-only, nothing to commit
-            }
 
             if ($document !== null && $plan->emitsDocument()) {
                 $this->emitDocument($document, $plan, $io);
@@ -831,6 +839,7 @@ final class InspectEventsCommand extends Command
             try {
                 $column = trim($m[1]);
                 $path = array_map(trim(...), explode('.', trim($m[2])));
+                // @infection-ignore-all; equivalent: the operator group admits no whitespace, so there is nothing to trim
                 $operator = trim($m[3]);
                 $value = trim($m[4]);
                 $conditions[] = new JsonCondition($column, $path, $operator, $value);
@@ -1078,11 +1087,11 @@ final class InspectEventsCommand extends Command
     private function redactedWheres(array $wheres): array
     {
         return array_map(function (string $expr): string {
-            if (preg_match('/^(content)\.(.+?)(>=|<=|!=|=|>|<)(.*)$/s', $expr, $m) !== 1) {
+            if (preg_match('/^(content)\.(.+?)(>=|<=|!=|=|>|<)(.*)$/s', trim($expr), $m) !== 1) {
                 return $expr;
             }
 
-            $head = explode('.', $m[2])[0];
+            $head = trim(explode('.', $m[2])[0]);
 
             return $this->veil->isDeclaredKey($head) ? $m[1].'.'.$m[2].$m[3].'<redacted>' : $expr;
         }, $wheres);

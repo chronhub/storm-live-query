@@ -18,8 +18,10 @@ use function str_contains;
  *
  * It exists because some questions are a SET of ids rather than one, and a filter that only knows
  * `=` forces the caller into one query per id. The rendered SQL stays a plain equality against a
- * bound list, so it rides the same expression index a single equality does; a range or a prefix
- * match would not, the store's correlation index carrying the database collation rather than a
+ * bound list, and the list is not what costs an index: `InspectFilter` renders the path itself as
+ * `#>> string_to_array(:p, ',')`, a dynamic form an expression index serves only when the planner
+ * folds that parameter under a custom plan, never under a generic one. A range or a prefix match
+ * misses regardless, the store's correlation index carrying the database collation rather than a
  * byte-ordered one.
  *
  * Deliberately NOT reachable from the `--where` grammar, whose operators are a closed set the

@@ -10,8 +10,9 @@ use Storm\Chronicler\Query\QueryFilter;
 
 /**
  * The reference recipe: every event carrying one of the given `__correlation_id`s, in `sequence_no`
- * order, across all streams. A named, documented preset over the same bound JSON mechanism every
- * selector uses.
+ * order, across all streams. A named, documented preset over a fixed clause rather than over the
+ * bound JSON path every other selector renders: the correlation path is a literal and only the ids
+ * are bound, so `event_store_correlation_idx` serves it under a generic plan as under a custom one.
  *
  * It traces the ids it is GIVEN, and claims nothing beyond them. A saga that spawns a child gives
  * that child its own correlation id, so the child's footprint is a different id and this recipe

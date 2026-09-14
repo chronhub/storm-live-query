@@ -24,6 +24,16 @@ use function json_decode;
 final class JsonRendererTest extends TestCase
 {
     #[Test]
+    public function a_page_shorter_than_its_limit_is_not_reported_as_truncated(): void
+    {
+        $output = new BufferedOutput;
+        $this->renderer($this->meta())->render([$this->record(42, 'account-7')], $output);
+        $payload = json_decode($output->fetch(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertFalse($payload['meta']['truncated']);
+        self::assertSame(1, $payload['meta']['count']);
+    }
+
+    #[Test]
     public function rendering_from_records_answers_the_same_document_as_the_prebuilt_path(): void
     {
         // the command prebuilds the document and calls renderDocument, so this renderer's own
@@ -51,6 +61,8 @@ final class JsonRendererTest extends TestCase
         /** @var array{meta: array<string, mixed>, results: list<array<string, mixed>>} $payload */
         $payload = json_decode($rendered, true, flags: JSON_THROW_ON_ERROR);
         self::assertSame(2, $payload['meta']['count']);
+        self::assertSame('2026-05-21T10:00:00.000000+00:00', $payload['meta']['generated_at']);
+        self::assertSame(['mode' => 'selectors', 'category' => 'account'], $payload['meta']['source']);
         self::assertTrue($payload['meta']['truncated'], 'a page that filled its limit says so');
         self::assertCount(2, $payload['results']);
     }

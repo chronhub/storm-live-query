@@ -48,7 +48,7 @@ final class EventViewTest extends TestCase
 
         $row = EventView::toArray(
             new EventRecord(
-                new Message(new SampleEvent),
+                new Message(new SampleEvent, ['correlation_id' => 'corr-inspection']),
                 SequencePosition::fromInt(7),
                 PointInTime::from('2026-05-21T10:00:00.000000+00:00'),
             ),
@@ -59,5 +59,6 @@ final class EventViewTest extends TestCase
         self::assertSame('sample.happened', $row['type']);
         self::assertSame(SampleEvent::class, $row['class']);
         self::assertSame(7, $row['position']);
+        self::assertSame(['correlation_id' => 'corr-inspection'], $row['headers']);
     }
 }
