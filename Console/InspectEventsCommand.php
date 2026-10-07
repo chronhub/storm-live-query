@@ -38,8 +38,10 @@ use Storm\LiveQuery\Output\TableRenderer;
 use Storm\LiveQuery\Recipe\LiveQueryRecipe;
 use Storm\LiveQuery\Recipe\RecipeRegistry;
 use Storm\Stream\Exception\InvalidStreamException;
+use Storm\Stream\StreamCategory;
 use Storm\Stream\StreamName;
 use Storm\Support\Console\PositiveIntOption;
+use Storm\Support\Text\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -153,7 +155,7 @@ final class InspectEventsCommand extends Command
             return Command::INVALID;
         }
 
-        $out = $this->stringOrNull($input->getOption('out'));
+        $out = Str::nonEmptyOrNull($input->getOption('out'));
         $export = (bool) $input->getOption('export');
         $format = (string) $input->getOption('output');
 
@@ -208,7 +210,7 @@ final class InspectEventsCommand extends Command
             }
 
             if ($input->getOption('explain')) {
-                return $this->explain($filter, $io, rawSql: $this->stringOrNull($input->getOption('sql')) !== null);
+                return $this->explain($filter, $io, rawSql: Str::nonEmptyOrNull($input->getOption('sql')) !== null);
             }
 
             $meta = $this->documentMeta($input, $filter, $order, $vars);
@@ -222,7 +224,7 @@ final class InspectEventsCommand extends Command
             }
 
             return $this->renderRead($filter, $renderer, $output, $io, new RenderPlan(
-                rawSql: $this->stringOrNull($input->getOption('sql')) !== null,
+                rawSql: Str::nonEmptyOrNull($input->getOption('sql')) !== null,
                 wallclock: $order === 'wallclock',
                 effectiveLimit: $this->effectiveLimit($filter),
                 truncationHint: $this->truncationHint($input),
@@ -384,7 +386,7 @@ final class InspectEventsCommand extends Command
 
         if ($filter->category !== null) {
             try {
-                $exists = $this->existence->hasCategory($filter->category);
+                $exists = $this->existence->hasCategory(new StreamCategory($filter->category));
             } catch (InvalidStreamException) {
                 $err->note(sprintf('"%s" is not a well-formed category, so no event can match.', $filter->category));
 
@@ -483,8 +485,8 @@ final class InspectEventsCommand extends Command
         $descending = strtolower((string) $input->getOption('order')) === 'desc';
 
         return match (true) {
-            $this->stringOrNull($input->getOption('recipe')) !== null => 'Reached the recipe limit %d; more rows may exist.',
-            $this->stringOrNull($input->getOption('derived-stream')) !== null => 'Reached --limit %d; more rows may exist — raise --limit.',
+            Str::nonEmptyOrNull($input->getOption('recipe')) !== null => 'Reached the recipe limit %d; more rows may exist.',
+            Str::nonEmptyOrNull($input->getOption('derived-stream')) !== null => 'Reached --limit %d; more rows may exist — raise --limit.',
             $descending => 'Reached --limit %d; more rows may exist — raise --limit, or page DOWN with --to below the lowest sequence shown.',
             default => 'Reached --limit %d; more rows may exist — raise --limit or page with --after.',
         };
@@ -499,8 +501,8 @@ final class InspectEventsCommand extends Command
      */
     private function resolveFilter(InputInterface $input, SymfonyStyle $io, array $vars): ?QueryFilter
     {
-        $derivedStream = $this->stringOrNull($input->getOption('derived-stream'));
-        $recipe = $this->stringOrNull($input->getOption('recipe'));
+        $derivedStream = Str::nonEmptyOrNull($input->getOption('derived-stream'));
+        $recipe = Str::nonEmptyOrNull($input->getOption('recipe'));
 
         if ($derivedStream !== null && $recipe !== null) {
             $io->getErrorStyle()->error('--derived-stream cannot be combined with --recipe.');
@@ -617,15 +619,14 @@ final class InspectEventsCommand extends Command
      */
     private function hasFilterOptions(InputInterface $input): bool
     {
-        foreach (['stream', 'category', 'type', 'after', 'to', 'since', 'until', 'where', 'sql'] as $option) {
-            $value = $input->getOption($option);
+        return array_any(
+            ['stream', 'category', 'type', 'after', 'to', 'since', 'until', 'where', 'sql'],
+            static function (string $option) use ($input): bool {
+                $value = $input->getOption($option);
 
-            if (is_array($value) ? $value !== [] : ($value !== null && $value !== '')) {
-                return true;
-            }
-        }
-
-        return false;
+                return is_array($value) ? $value !== [] : ($value !== null && $value !== '');
+            },
+        );
     }
 
     /**
@@ -721,7 +722,7 @@ final class InspectEventsCommand extends Command
             }
         }
 
-        $sqlFragment = $this->stringOrNull($input->getOption('sql'));
+        $sqlFragment = Str::nonEmptyOrNull($input->getOption('sql'));
 
         if ($vars !== [] && $sqlFragment === null) {
             // STDERR like every advisory, so piped json/ndjson stdout stays parseable
@@ -752,8 +753,8 @@ final class InspectEventsCommand extends Command
         }
 
         return new InspectFilter(
-            stream: $this->stringOrNull($input->getOption('stream')),
-            category: $this->stringOrNull($input->getOption('category')),
+            stream: $this->canonicalStream(Str::nonEmptyOrNull($input->getOption('stream'))),
+            category: $this->canonicalCategory(Str::nonEmptyOrNull($input->getOption('category'))),
             types: $types,
             afterSequence: $after,
             maxSequence: $to,
@@ -1010,8 +1011,8 @@ final class InspectEventsCommand extends Command
      */
     private function documentMeta(InputInterface $input, QueryFilter $filter, string $order, array $vars): DocumentMeta
     {
-        $selectors = $this->stringOrNull($input->getOption('recipe')) === null
-            && $this->stringOrNull($input->getOption('derived-stream')) === null;
+        $selectors = Str::nonEmptyOrNull($input->getOption('recipe')) === null
+            && Str::nonEmptyOrNull($input->getOption('derived-stream')) === null;
 
         return new DocumentMeta(
             source: $this->documentSource($input, $vars),
@@ -1041,13 +1042,13 @@ final class InspectEventsCommand extends Command
      */
     private function documentSource(InputInterface $input, array $vars): array
     {
-        $recipe = $this->stringOrNull($input->getOption('recipe'));
+        $recipe = Str::nonEmptyOrNull($input->getOption('recipe'));
 
         if ($recipe !== null) {
             return ['mode' => 'recipe', 'recipe' => $recipe, 'vars' => $vars];
         }
 
-        $derived = $this->stringOrNull($input->getOption('derived-stream'));
+        $derived = Str::nonEmptyOrNull($input->getOption('derived-stream'));
 
         if ($derived !== null) {
             return ['mode' => 'derived_stream', 'derived_stream' => $derived];
@@ -1056,7 +1057,7 @@ final class InspectEventsCommand extends Command
         $selectors = [];
 
         foreach (['stream', 'category', 'type', 'after', 'to', 'since', 'until', 'sql'] as $option) {
-            $value = $this->stringOrNull($input->getOption($option));
+            $value = Str::nonEmptyOrNull($input->getOption($option));
 
             if ($value !== null) {
                 $selectors[$option] = $value;
@@ -1132,9 +1133,42 @@ final class InspectEventsCommand extends Command
         return $to === null ? $safeMax : min($to, $safeMax);
     }
 
-    private function stringOrNull(mixed $value): ?string
+    /**
+     * The read and the empty-result diagnostic must see ONE value: the diagnostic probes through
+     * `StreamName`, so the read compares the same canonical form, or `Order-1` reads nothing and is
+     * then reported as existing. A malformed value is kept raw: the diagnostic names the
+     * malformation, and a raw value matches no row.
+     */
+    private function canonicalStream(?string $stream): ?string
     {
-        return is_string($value) && $value !== '' ? $value : null;
+        if ($stream === null) {
+            return null;
+        }
+
+        try {
+            return new StreamName($stream)->toString();
+        } catch (InvalidStreamException) {
+            return $stream;
+        }
+    }
+
+    /**
+     * The category twin of `canonicalStream()`; a qualified name is not a category and stays raw
+     * for the diagnostic to refuse.
+     */
+    private function canonicalCategory(?string $category): ?string
+    {
+        if ($category === null) {
+            return null;
+        }
+
+        try {
+            $name = new StreamName($category);
+        } catch (InvalidStreamException) {
+            return $category;
+        }
+
+        return $name->qualifier === null ? $name->category : $category;
     }
 
     /**

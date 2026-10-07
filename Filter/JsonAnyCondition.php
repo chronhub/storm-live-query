@@ -6,6 +6,7 @@ namespace Storm\LiveQuery\Filter;
 
 use InvalidArgumentException;
 
+use function array_find;
 use function count;
 use function implode;
 use function in_array;
@@ -56,14 +57,16 @@ final readonly class JsonAnyCondition
             throw new InvalidArgumentException('JSON path cannot be empty.');
         }
 
-        foreach ($path as $segment) {
-            if ($segment === '') {
+        $invalidSegment = array_find(
+            $path,
+            static fn (string $segment): bool => $segment === '' || str_contains($segment, ','),
+        );
+        if ($invalidSegment !== null) {
+            if ($invalidSegment === '') {
                 throw new InvalidArgumentException('JSON path cannot contain an empty segment (a leading, trailing, or doubled "." in the path).');
             }
 
-            if (str_contains($segment, ',')) {
-                throw new InvalidArgumentException(sprintf('JSON path segment "%s" cannot contain a comma: the path is bound as a comma-joined string.', $segment));
-            }
+            throw new InvalidArgumentException(sprintf('JSON path segment "%s" cannot contain a comma: the path is bound as a comma-joined string.', $invalidSegment));
         }
 
         if (count($values) === 0) {

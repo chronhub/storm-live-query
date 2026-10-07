@@ -67,19 +67,20 @@ final class ListRecipesCommand extends Command
             return Command::SUCCESS;
         }
 
-        $rows = [];
-
-        foreach ($recipes as $recipe) {
-            // RecipeParam declares a description no other surface displays; ride it inline so
-            // `--var` discovery does not require opening the recipe class
-            $params = implode(', ', array_map(
-                static fn (RecipeParam $p): string => ($p->required ? $p->name : $p->name.'?')
-                    .($p->description !== '' ? ' — '.$p->description : ''),
-                $recipe->params(),
-            ));
-
-            $rows[] = [$recipe->name(), $params, $recipe->description()];
-        }
+        $rows = array_map(
+            static fn (LiveQueryRecipe $recipe): array => [
+                $recipe->name(),
+                // RecipeParam declares a description no other surface displays; ride it inline so
+                // `--var` discovery does not require opening the recipe class
+                implode(', ', array_map(
+                    static fn (RecipeParam $p): string => ($p->required ? $p->name : $p->name.'?')
+                        .($p->description !== '' ? ' — '.$p->description : ''),
+                    $recipe->params(),
+                )),
+                $recipe->description(),
+            ],
+            $recipes,
+        );
 
         $io->table(['recipe', 'params (? = optional)', 'description'], $rows);
 

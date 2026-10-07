@@ -55,6 +55,7 @@ final class JsonAnyConditionTest extends TestCase
         // a leading, trailing or doubled "." in the path the operator typed reaches here as an
         // empty segment; passed through it would address a key that cannot exist
         $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/empty segment/');
 
         new JsonAnyCondition('header', ['a', '', 'b'], ['v']);
     }

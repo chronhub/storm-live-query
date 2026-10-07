@@ -52,12 +52,11 @@ final readonly class JsonCondition
             throw new InvalidArgumentException('JSON path cannot contain an empty segment (a leading, trailing, or doubled "." in the path).');
         }
 
-        foreach ($path as $segment) {
-            // the wire format joins segments with a comma for string_to_array, so a comma INSIDE a
-            // segment would silently split it into a different, deeper path and match nothing
-            if (str_contains($segment, ',')) {
-                throw new InvalidArgumentException(sprintf('JSON path segment "%s" cannot contain a comma.', $segment));
-            }
+        // the wire format joins segments with a comma for string_to_array, so a comma INSIDE a
+        // segment would silently split it into a different, deeper path and match nothing
+        $commaSegment = array_find($path, static fn (string $segment): bool => str_contains($segment, ','));
+        if ($commaSegment !== null) {
+            throw new InvalidArgumentException(sprintf('JSON path segment "%s" cannot contain a comma.', $commaSegment));
         }
     }
 
