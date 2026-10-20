@@ -65,7 +65,7 @@ final class JsonAnyConditionTest extends TestCase
     public function a_segment_holding_a_comma_is_refused_because_the_path_is_bound_comma_joined(): void
     {
         // the renderer binds the path as one comma-joined string for `string_to_array`, so a comma
-        // inside a segment would SPLIT it and address a different key than the caller named
+        // inside a segment would split it and address a different key than the caller named
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/comma/');
 

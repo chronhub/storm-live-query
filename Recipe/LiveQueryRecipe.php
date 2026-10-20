@@ -12,17 +12,23 @@ use Storm\Chronicler\Query\QueryFilter;
  *
  * A recipe is a plain DI-discovered class with no config DSL and no scaffolder: it declares its
  * `--var` parameters and builds a `QueryFilter` from them. It shapes a fetch only; it never reduces
- * events into a value, which is a `QueryProjection`, folded by a dev-written command on the query
- * projection runner. Apps add their own by implementing this interface; the framework ships
- * `correlation_trace` as the reference.
+ * events into a value. That is a `QueryProjection`, folded by a dev-written command on the query
+ * projection runner over a `MutableQueryFilter` the runner windows, never over a recipe's filter. Apps
+ * add their own by implementing this interface; the framework ships `correlation_trace` as the
+ * reference.
  *
- * Contract: a recipe owns its whole query, limit and order included, so the command rejects
- * `--limit`/`--order`/`--safe-head` in recipe mode; that limit MUST be bounded: a recipe built on
- * `InspectFilter` is bounded by construction, since the filter refuses beyond its MAX_LIMIT; one
- * returning a custom `QueryFilter` owns the same obligation, unverifiable here, so an unbounded
- * custom filter is a bug. `RecipeParam` declares presence only, required or optional; value
- * VALIDATION belongs in `filter()`, and a refusal throws `InvalidArgumentException`, which the
- * command renders as an operator error, a message plus FAILURE, like the native selectors' own.
+ * Contract:
+ *
+ * - A recipe owns its whole query, limit and order included, so the command rejects `--limit`,
+ *   `--order` and `--safe-head` in recipe mode.
+ *
+ * - That limit must be bounded. A recipe built on `InspectFilter` is bounded by construction, since
+ *   the filter refuses beyond its `MAX_LIMIT`; one returning a custom `QueryFilter` owns the same
+ *   obligation, unverifiable here, so an unbounded custom filter is a bug.
+ *
+ * - `RecipeParam` declares presence only, required or optional. Value validation belongs in
+ *   `filter()`, and a refusal throws `InvalidArgumentException`, which the command renders as an
+ *   operator error, a message plus a `FAILURE` exit, like the native selectors' own.
  */
 interface LiveQueryRecipe
 {

@@ -38,8 +38,8 @@ final class JsonConditionTest extends TestCase
     #[Test]
     public function rejects_a_path_with_an_empty_segment(): void
     {
-        // a leading / trailing / doubled "." in --where, for example `header..a`, explodes to an empty segment;
-        // reject it so the inspect tool errors instead of silently matching nothing.
+        // a leading, trailing, or doubled "." in --where, for example `header..a`, explodes to an empty
+        // segment; reject it so the inspect tool errors instead of silently matching nothing.
         $this->expectException(InvalidArgumentException::class);
 
         new JsonCondition('header', ['', 'a'], '=', 'v');
@@ -48,7 +48,7 @@ final class JsonConditionTest extends TestCase
     #[Test]
     public function rejects_a_path_segment_containing_a_comma(): void
     {
-        // the wire format joins segments with a comma for string_to_array, so a comma INSIDE a
+        // the wire format joins segments with a comma for string_to_array, so a comma inside a
         // segment would silently rewrite `a,b` into the deeper path a.b and match nothing
         $this->expectException(InvalidArgumentException::class);
 

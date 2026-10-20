@@ -28,7 +28,7 @@ final class CorrelationTraceRecipeTest extends TestCase
     #[Test]
     public function the_predicate_is_delegated_to_the_store_layer(): void
     {
-        // the recipe owns the parsing and nothing else: what the ids MEAN as a query, and the
+        // the recipe owns the parsing and nothing else: what the ids mean as a query, and the
         // index-matching spelling that serves them, live in Chronicler with the index itself.
         $filter = new CorrelationTraceRecipe()->filter(['id' => 'corr-9']);
 
@@ -39,7 +39,7 @@ final class CorrelationTraceRecipeTest extends TestCase
     public function several_ids_reach_the_filter_trimmed_and_in_order(): void
     {
         // the lineage form: a saga child carries its own correlation id, so tracing a whole lineage
-        // is tracing a SET the caller resolved elsewhere, never a prefix this recipe could guess
+        // is tracing a set the caller resolved elsewhere, never a prefix this recipe could guess
         $filter = new CorrelationTraceRecipe()->filter(['id' => 'corr-9, corr-9\x1fkyc ,corr-9\x1fkyc\x1fdocs']);
 
         $this->assertSame(['corr-9', 'corr-9\x1fkyc', 'corr-9\x1fkyc\x1fdocs'], $this->boundIds($filter));
@@ -59,7 +59,7 @@ final class CorrelationTraceRecipeTest extends TestCase
     public function a_list_of_nothing_but_separators_is_refused_by_the_recipes_own_guard(): void
     {
         // the guard the required-param check upstream cannot make: presence is proven, content is not.
-        // The MESSAGE is the assertion, not the type: the filter refuses an empty set too, and with
+        // The message is the assertion, not the type: the filter refuses an empty set too, and with
         // the same exception class, so a type-only expectation passes whichever of the two fired.
         // Only this one can name the option an operator typed.
         $this->expectException(InvalidArgumentException::class);

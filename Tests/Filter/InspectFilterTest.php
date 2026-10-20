@@ -87,7 +87,7 @@ final class InspectFilterTest extends TestCase
         $sql = $qb->getSQL();
         // text equality, so no numeric cast, value bound
         $this->assertStringContainsString("e.header #>> string_to_array(:wpath0, ',') = :wval0", $sql);
-        // numeric comparator, so GUARDED cast: a non-numeric row yields NULL, a non-match, never a
+        // numeric comparator, so guarded cast: a non-numeric row yields null, a non-match, never a
         // 22P02 killing the whole query including its sane rows
         $this->assertStringContainsString("(CASE WHEN (e.content #>> string_to_array(:wpath1, ',')) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (e.content #>> string_to_array(:wpath1, ','))::numeric END) > CAST(:wval1 AS numeric)", $sql);
 
@@ -100,8 +100,8 @@ final class InspectFilterTest extends TestCase
     #[Test]
     public function a_not_equal_compares_with_is_distinct_from_on_both_branches(): void
     {
-        // the SQL != yields NULL on a missing path and silently narrows the answer; IS DISTINCT
-        // FROM makes a missing or non-numeric value a MATCH, which is what "not equal" means
+        // the SQL != yields null on a missing path and silently narrows the answer; IS DISTINCT
+        // FROM makes a missing or non-numeric value a match, which is what "not equal" means
         $qb = $this->queryBuilder();
 
         new InspectFilter(conditions: [
@@ -134,7 +134,7 @@ final class InspectFilterTest extends TestCase
     #[Group('adversarial')]
     public function a_fragment_closing_the_wrapper_itself_is_refused_at_construction(): void
     {
-        // the escape this guard exists for: '1=1) --' closes OUR parenthesis and comments out the generated
+        // the escape this guard exists for: '1=1) --' closes our parenthesis and comments out the generated
         // ORDER BY and the hard LIMIT, the exact bounds this filter owns; unbalanced parens
         // outside string literals make the shape unwritable
         $this->expectException(InvalidArgumentException::class);
@@ -233,7 +233,7 @@ final class InspectFilterTest extends TestCase
     #[Test]
     public function a_set_condition_renders_the_bound_dynamic_path_form(): void
     {
-        // the ANY branch, which no recipe composes any more since the correlation predicate moved to
+        // the set branch, which no recipe composes any more since the correlation predicate moved to
         // the store layer. The rendering is still the carrier's whole reason to exist, and it must
         // stay the `#>> string_to_array(...)` form rather than the semantically equal `->>` key form.
         // Only a custom plan can fold the bound path and match an expression index; a generic plan
@@ -256,10 +256,10 @@ final class InspectFilterTest extends TestCase
     #[Group('adversarial')]
     public function a_condition_following_a_set_one_is_still_applied(): void
     {
-        // the ORDER is the assertion, and it is the whole point of putting the set FIRST. The
-        // dispatch loop leaves the set branch by `continue`; were that a `break`, everything after
-        // the first set condition would be dropped and the query would narrow to it alone. A
-        // fixture with the set LAST cannot tell the two apart.
+        // The order is the assertion, testing that putting the set first preserves subsequent conditions.
+        // The dispatch loop leaves the set branch by `continue`; were that a `break`, everything after
+        // the first set condition would be dropped and the query would narrow to it alone. A fixture
+        // with the set last cannot tell the two apart.
         $qb = $this->queryBuilder();
 
         new InspectFilter(

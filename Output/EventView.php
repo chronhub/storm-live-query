@@ -12,22 +12,22 @@ use Storm\Contracts\Chronicler\EventTypeMapper;
 /**
  * Flattens a stored `EventRecord` into a render-friendly row, shared by every output format.
  *
- * The value LiveQuery adds over raw `psql`: the event is deserialized, so `content` is the domain
- * event's payload, not a jsonb blob.
+ * It is the value LiveQuery adds over raw `psql`: the event is deserialized, so `content` is the
+ * domain event's payload rather than a jsonb blob.
  *
- * `type` is the CURRENT canonical alias, computed from the hydrated class via the mapper, NOT the
- * raw value of the store's `type` column: after an alias rename via `replaces` an old row displays
- * the new alias, the logical view, and the persisted spelling is not surfaced. Auditing the stored
- * bytes is `psql`'s job; exposing a separate `stored_type` would need `EventRecord` to carry the
- * raw alias, deferred until a consumer needs it. The document leaves the process through `--out`
- * files and the `LiveQueryExport` port, and the house rule holds on every outward surface: the
- * alias is the stable type, a class name is not, being rename-fragile and not portable
- * cross-language. The FQCN still rides along as `class`, the in-process hydration detail a dev
+ * `type` is the current canonical alias, computed from the hydrated class through the mapper, not
+ * the raw value of the store's `type` column: after an alias rename through `replaces`, an old row
+ * displays the new alias, the logical view, and the persisted spelling is not surfaced. Auditing the
+ * stored bytes is `psql`'s job; exposing a separate `stored_type` would need `EventRecord` to carry
+ * the raw alias, which waits for a consumer that needs it. The document leaves the process through
+ * `--out` files and the `LiveQueryExport` port, and the house rule holds on every outward surface:
+ * the alias is the stable type, and a class name is not, being rename-fragile and not portable
+ * across languages. The FQCN still comes along as `class`, the in-process hydration detail a dev
  * reading a trace wants at hand.
  *
- * `content` passes through the {@see \Storm\Chronicler\Record\PersonalDataVeil}: a `#[Personal]` class's declared keys show
- * what the store holds, either the ciphered envelope or a pre-marking row's cleartext, never the
- * rebuilt event's decrypted values. Inspection reads without decrypting, by doctrine.
+ * `content` passes through the `PersonalDataVeil`: a `#[Personal]` class's declared keys show what
+ * the store holds, either the ciphered envelope or a pre-marking row's cleartext, never the rebuilt
+ * event's decrypted values. Inspection reads without decrypting.
  */
 final class EventView
 {

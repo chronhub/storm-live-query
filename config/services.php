@@ -12,8 +12,9 @@ namespace Symfony\Component\DependencyInjection\Loader\Configurator;
  * LiveQueryRecipe is tagged `storm.live_query_recipe` via instanceof so the RecipeRegistry collects it.
  *
  * Excluded as non-services: the query filters + JsonCondition, value objects built per call; the output
- * renderers, instantiated by the command; the RecipeParam and RenderPlan value objects; interfaces,
- * auto-skipped; config; tests.
+ * renderers, the InspectFilterFactory and the InspectDocument, instantiated by the command; the
+ * RecipeParam, RenderPlan and InspectRequest value objects and the InvalidInspectOption exception;
+ * interfaces, auto-skipped; config; tests.
  */
 
 use Storm\LiveQuery\Recipe\LiveQueryRecipe;
@@ -32,6 +33,10 @@ return static function (ContainerConfigurator $container): void {
             dirname(__DIR__).'/Output/',
             dirname(__DIR__).'/Recipe/RecipeParam.php',
             dirname(__DIR__).'/Console/RenderPlan.php',
+            dirname(__DIR__).'/Console/InspectRequest.php',
+            dirname(__DIR__).'/Console/InvalidInspectOption.php',
+            dirname(__DIR__).'/Console/InspectFilterFactory.php',
+            dirname(__DIR__).'/Console/InspectDocument.php',
             dirname(__DIR__).'/config/',
             dirname(__DIR__).'/Tests/',
         ]);

@@ -16,15 +16,14 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * List the registered LiveQuery recipes, with their name, description, and `--var` parameters, so
- * an operator can discover what `storm:events:inspect --recipe=<name>` accepts before running it.
+ * List the registered LiveQuery recipes, with their name, description, and `--var` parameters.
+ *
+ * An operator can so discover what `storm:events:inspect --recipe=<name>` accepts before running it.
  *
  * Examples:
  * ```bash
  * storm:events:recipes
  * ```
- *
- * @see LiveQueryRecipe
  */
 #[AsCommand(name: 'storm:events:recipes', description: 'List available LiveQuery recipes.')]
 final class ListRecipesCommand extends Command
@@ -70,7 +69,7 @@ final class ListRecipesCommand extends Command
         $rows = array_map(
             static fn (LiveQueryRecipe $recipe): array => [
                 $recipe->name(),
-                // RecipeParam declares a description no other surface displays; ride it inline so
+                // RecipeParam declares a description no other surface displays; display it inline so
                 // `--var` discovery does not require opening the recipe class
                 implode(', ', array_map(
                     static fn (RecipeParam $p): string => ($p->required ? $p->name : $p->name.'?')

@@ -17,25 +17,28 @@ use Storm\Clock\PointInTime;
 /**
  * The LiveQuery ad-hoc inspection filter for `StreamReader::retrieveByFilter()`.
  *
- * It only narrows and orders rows against the `e` alias; the store owns the SELECT columns and the
- * row-to-`EventRecord` mapping. All dimensions are optional and AND-combined; the limit is always
- * applied and CAPPED BY THE FILTER ITSELF at `MAX_LIMIT`; `pdo_pgsql` buffers the whole result set
- * client-side, so an unbounded read is an OOM, and bounding here rather than only at the command
- * bounds every recipe built on this filter too. Types must already be the stored type strings.
+ * It only narrows and orders rows against the `e` alias; the store owns the `SELECT` columns and the
+ * row-to-`EventRecord` mapping. All dimensions are optional and `AND`-combined. The limit is always
+ * applied and capped by the filter itself at `MAX_LIMIT`: `pdo_pgsql` buffers the whole result set
+ * client-side, so an unbounded read runs out of memory, and bounding here rather than only at the
+ * command bounds every recipe built on this filter too. Types must already be the stored type strings.
  *
- * Two escape tiers sit above the typed dimensions. The JSON `--where` predicate, a `JsonCondition`,
- * carries equality and comparators on `header` or `content`, where the column and operator come
- * from closed allowlists and the path and value are bound with `#>> string_to_array(:p, ',')`; a
- * NUMERIC comparison guards its cast, so a heterogeneous row such as an old textual representation
- * or a sentinel is a non-match, never a 22P02 killing the whole query. `!=` alone compares with
- * `IS DISTINCT FROM`: a row missing the path, or failing the numeric cast, IS "not equal", where
- * the SQL `!=` would yield NULL and silently narrow "events that are not shipped" into "events
- * that carry a status and it is not shipped", exactly the anomalous rows an audit hunts. The
- * ordering comparators keep the NULL semantics, since "greater than" is meaningless on a missing
- * value. The raw `--sql` fragment is
- * an opaque boolean expression AND-ed onto the query, with `:k` placeholders bound from `$vars`; a
- * user variable whose name collides with an internal binding is REFUSED, never silently allowed to
- * rebind a selector out from under the SQL text it still displays.
+ * Two escape tiers sit above the typed dimensions:
+ *
+ * - The JSON `--where` predicate, a `JsonCondition`, carries equality and comparators on `header` or
+ *   `content`. The column and operator come from closed allowlists, and the path and value are bound
+ *   with `#>> string_to_array(:p, ',')`. A numeric comparison guards its cast, so a heterogeneous
+ *   row, such as an old textual representation or a sentinel, is a non-match, never a `22P02` that
+ *   kills the whole query. `!=` alone compares with `IS DISTINCT FROM`: a row missing the path, or
+ *   failing the numeric cast, is "not equal", where the SQL `!=` would yield `NULL` and silently
+ *   narrow "events that are not shipped" into "events that carry a status and it is not shipped",
+ *   exactly the anomalous rows an audit hunts. The ordering comparators keep the `NULL` semantics,
+ *   since "greater than" is meaningless on a missing value.
+ *
+ * - The raw `--sql` fragment is an opaque boolean expression `AND`-ed onto the query, with `:k`
+ *   placeholders bound from `$vars`. A user variable whose name collides with an internal binding is
+ *   refused, never silently allowed to rebind a selector out from under the SQL text it still
+ *   displays.
  *
  * @see \Storm\Chronicler\Store\StreamReader::retrieveByFilter()
  * @see \Storm\Chronicler\Record\EventRecord
@@ -49,8 +52,9 @@ final readonly class InspectFilter implements QueryFilter
     public const int MAX_LIMIT = 50_000;
 
     /**
-     * @param  list<string>  $types  already-resolved stored type strings; the alias union replaces the union FQCN
-     * @param  list<JsonCondition|JsonAnyCondition>  $conditions  json predicates, AND-combined; the
+     * @param  list<string>  $types  already-resolved stored type strings; the alias union replaces the
+     *                               union FQCN
+     * @param  list<JsonCondition|JsonAnyCondition>  $conditions  json predicates, `AND`-combined; the
      *                                                            set form comes from a recipe, the
      *                                                            scalar one from `--where` too
      * @param  array<string, string>  $vars  bound values for the `--sql` fragment's `:k` placeholders
@@ -81,10 +85,10 @@ final readonly class InspectFilter implements QueryFilter
 
         // The wrapper-escape guard: a fragment closing our parenthesis itself and
         // ending in a line comment would swallow the generated ORDER BY and the hard LIMIT, the
-        // exact bounds this filter exists to own. Balanced parens, measured OUTSIDE single-quoted
+        // exact bounds this filter exists to own. Balanced parens, measured outside single-quoted
         // literals so a ')' inside a pattern never false-refuses, make that shape unwritable; the
         // newline the apply side appends before its closing parenthesis kills the comment vector
-        // for balanced fragments. The literal-stripping regex understands STANDARD single-quoted
+        // for balanced fragments. The literal-stripping regex understands standard single-quoted
         // literals only, not dollar-quoting nor E'' escape strings: a miscount from those lands in
         // the refusing direction or in a Postgres syntax error, never in a swallowed bound, and the
         // fragment is documented operator-owned risk; a guard, not a parser.
@@ -145,7 +149,7 @@ final readonly class InspectFilter implements QueryFilter
         }
 
         if ($this->sqlFragment !== null) {
-            // the newline is load-bearing: a fragment ending in a line comment eats to END OF LINE,
+            // the newline is load-bearing: a fragment ending in a line comment eats to end of line,
             // so our closing parenthesis, and DBAL's ORDER BY / LIMIT after it, live on the next
             // one and survive; paired with the constructor's balance guard, the wrapper cannot be
             // escaped
@@ -153,7 +157,7 @@ final readonly class InspectFilter implements QueryFilter
 
             // Drift-proof collision guard: every internal binding, namely the selectors, the time window,
             // and wpathN/wvalN, is already on the builder at this point; a user key that matches one would
-            // silently REBIND a selector out from under the SQL text still displaying it, and any
+            // silently rebind a selector out from under the SQL text still displaying it, and any
             // exported provenance would then claim a scope the rows do not have.
             $bound = $qb->getParameters();
 
@@ -181,15 +185,15 @@ final readonly class InspectFilter implements QueryFilter
         // column + operator are closed allowlists, validated by JsonCondition; path + value are bound.
         $extract = sprintf("e.%s #>> string_to_array(:%s, ',')", $condition->column, $pathParam);
 
-        // IS DISTINCT FROM under !=, so a NULL extraction is a MATCH: "not equal" includes the rows
-        // that do not carry the value at all; the ordering comparators keep the NULL exclusion.
+        // IS DISTINCT FROM under !=, so a null extraction is a match: "not equal" includes the rows
+        // that do not carry the value at all; the ordering comparators keep the null exclusion.
         $operator = $condition->operator === '!=' ? 'IS DISTINCT FROM' : $condition->operator;
 
         if ($condition->isNumeric()) {
             // Guarded cast: a row whose extracted text is not strictly numeric, such as an old textual
-            // representation, a sentinel, or another event type sharing the path, yields NULL, so the
-            // comparison is a NON-MATCH, never a 22P02 that would kill the whole query, sane rows
-            // included; under != the NULL matches, the same rule as the text branch.
+            // representation, a sentinel, or another event type sharing the path, yields null, so the
+            // comparison is a non-match, never a 22P02 that would kill the whole query, sane rows
+            // included; under != the null matches, the same rule as the text branch.
             $qb->andWhere(sprintf(
                 "(CASE WHEN (%s) ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (%s)::numeric END) %s CAST(:%s AS numeric)",
                 $extract,
@@ -208,10 +212,10 @@ final readonly class InspectFilter implements QueryFilter
     /**
      * The set form: one bound list, expanded by DBAL into an `IN` of equalities.
      *
-     * Equality is the whole point. The dynamic path reaches an expression index only when a custom
-     * plan folds the bound path into the indexed expression. A generic plan keeps the path opaque and
-     * cannot match that index. A prefix or a range would fall back to a full scan and, on a database
-     * whose collation is not byte-ordered, would also be plain wrong.
+     * It stays an equality because nothing else can be served. The dynamic path reaches an expression
+     * index only when a custom plan folds the bound path into the indexed expression. A generic plan
+     * keeps the path opaque and cannot match that index. A prefix or a range would fall back to a full
+     * scan and, on a database whose collation is not byte-ordered, would also be plain wrong.
      */
     private function applyAnyCondition(QueryBuilder $qb, JsonAnyCondition $condition, int $index): void
     {

@@ -11,7 +11,7 @@ use InvalidArgumentException;
  *
  * A pure data carrier: the command parses the CLI string into one of these, as column plus dotted
  * path plus operator plus value, and `InspectFilter` turns it into parameter-bound SQL. The column
- * and operator are constrained to closed allowlists here, belt-and-suspenders since the command's
+ * and operator are constrained to closed allowlists here as a runtime guard, since the command's
  * regex already guarantees them, because those two are the only parts that reach the SQL string.
  * The path and value are always bound, never interpolated.
  *
@@ -52,7 +52,7 @@ final readonly class JsonCondition
             throw new InvalidArgumentException('JSON path cannot contain an empty segment (a leading, trailing, or doubled "." in the path).');
         }
 
-        // the wire format joins segments with a comma for string_to_array, so a comma INSIDE a
+        // the wire format joins segments with a comma for string_to_array, so a comma inside a
         // segment would silently split it into a different, deeper path and match nothing
         $commaSegment = array_find($path, static fn (string $segment): bool => str_contains($segment, ','));
         if ($commaSegment !== null) {

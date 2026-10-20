@@ -20,11 +20,12 @@ writing and running a projection for a one-off question.
 ## The boundary — it renders, it does not compute
 
 LiveQuery **fetches and renders**; it never reduces events into a value. To compute a result (a balance,
-a count-by-type, a running total) use a **`QueryProjection`**, folded one-shot by a dev-written command on
-`QueryProjectionRunner` (there is no generic compute command — the dev builds the query filter). One
-compute engine, exposed there — LiveQuery stays a viewer. The reads compose along
-three axes: *filter* (shared) → *+ reducer* = QueryProjection → *+ checkpoint/persistence* = a persistent
-projection (ReadModel/Link).
+a count-by-type, a running total) use a **`QueryProjection`**, folded by a dev-written command up to the
+safe head — `QueryFolds::fold()`, or `QueryProjectionRunner::stream()` with a `MutableQueryFilter` the runner
+windows (there is no generic compute command). LiveQuery's own filters, recipes included, are never folded.
+One compute engine, exposed there — LiveQuery stays a viewer. The reads compose along
+three axes: *filter* → *+ reducer and runner window* = QueryProjection → *+ checkpoint/persistence* = a
+persistent projection (ReadModel/Link).
 
 ## Commands
 

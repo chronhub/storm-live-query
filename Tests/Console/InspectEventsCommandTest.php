@@ -20,8 +20,8 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
- * The selector-validation guards of storm:events:inspect: a malformed selector is rejected BEFORE
- * any read and turned into a reported error plus Command::FAILURE. The guards covered:
+ * The selector-validation guards of storm:events:inspect: a malformed selector is rejected before
+ * any read and turned into a reported error plus `Command::FAILURE`. The guards covered:
  *
  * - A malformed --derived-stream, where StreamName validation throws on resolve
  * - A malformed --where, where JsonCondition rejects an empty path segment
@@ -92,8 +92,11 @@ final class InspectEventsCommandTest extends TestCase
         yield 'year zero' => [['--since' => '0000-01-01'], 'Invalid --since'];
         yield 'invalid since' => [['--since' => 'not a date'], '--since'];
         yield 'invalid until' => [['--until' => 'not a date'], '--until'];
-        yield 'non numeric limit' => [['--limit' => 'abc'], 'Invalid --limit'];
+        yield 'non numeric limit' => [['--limit' => 'abc'], 'Invalid --limit "abc"'];
+        yield 'non numeric after' => [['--after' => 'abc'], 'Invalid --after "abc"'];
         yield 'excessive limit' => [['--limit' => '1000000000'], 'exceeds the maximum'];
+        // DerivedStreamFilter has no ceiling of its own, so the command's cap is the only one
+        yield 'excessive derived-stream limit' => [['--derived-stream' => 'feed', '--limit' => '50001'], 'exceeds the maximum'];
     }
 
     #[Test]
@@ -139,14 +142,56 @@ final class InspectEventsCommandTest extends TestCase
     {
         $tester = new CommandTester($this->command());
 
-        // the numeric scan walks limit, then after, then to. An absent --after is SKIPPED, and a scan
-        // that ended on that skip would carry a non-digit --to past the guard and into the read path
+        // the numeric scan walks after, then to. An absent --after is skipped, and a scan that ended
+        // on that skip would carry a non-digit --to past the guard and into the read path
         $exit = $tester->execute(['--to' => 'abc']);
 
         $this->assertSame(Command::INVALID, $exit);
         $this->assertStringContainsString('Invalid --to', $tester->getDisplay());
-        // --to admits zero where --limit does not, and the sentence is what tells the operator which
+        // a sequence bound admits zero, and the sentence tells the operator so
         $this->assertStringContainsString('must be a non-negative integer', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function a_zero_padded_limit_within_the_cap_is_accepted(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $command = new InspectEventsCommand(
+            $this->createStub(StreamReader::class),
+            $connection,
+            $this->createStub(EventTypeMapper::class),
+            new RecipeRegistry([]),
+            $this->clock(),
+            $this->createStub(StreamExistence::class),
+        );
+
+        // fourteen characters spelling 100: the page size is the number, and a check on the
+        // spelling's length would refuse it as beyond the cap
+        $tester = new CommandTester($command);
+        $exit = $tester->execute(['--stream' => 'order-1', '--limit' => '00000000000100', '--timeout' => '0', '--dump-sql' => true]);
+
+        $this->assertSame(Command::SUCCESS, $exit);
+        $this->assertStringContainsString('LIMIT 100', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function the_limit_cap_itself_is_accepted(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $command = new InspectEventsCommand(
+            $this->createStub(StreamReader::class),
+            $connection,
+            $this->createStub(EventTypeMapper::class),
+            new RecipeRegistry([]),
+            $this->clock(),
+            $this->createStub(StreamExistence::class),
+        );
+
+        $tester = new CommandTester($command);
+        $exit = $tester->execute(['--stream' => 'order-1', '--limit' => '50000', '--timeout' => '0', '--dump-sql' => true]);
+
+        $this->assertSame(Command::SUCCESS, $exit);
+        $this->assertStringContainsString('LIMIT 50000', $tester->getDisplay());
     }
 
     #[Test]
@@ -155,7 +200,8 @@ final class InspectEventsCommandTest extends TestCase
         $tester = new CommandTester($this->command());
 
         // the port is optional and storm ships no adapter, so this guard is the only thing between an
-        // opted-in run and a silent no-op; it answers FAILURE and names what the app must bind
+        // opted-in run and a silent no-op; it answers `Command::FAILURE` and names what the app must
+        // bind
         $exit = $tester->execute(['--export' => true]);
 
         $this->assertSame(Command::FAILURE, $exit);
@@ -248,6 +294,73 @@ final class InspectEventsCommandTest extends TestCase
     }
 
     #[Test]
+    #[DataProvider('timeoutsBeyondThePostgresRange')]
+    public function a_timeout_beyond_the_postgres_range_is_refused_before_touching_the_connection(string $timeout): void
+    {
+        $executed = [];
+        $connection = $this->createStub(Connection::class);
+        $connection->method('executeStatement')->willReturnCallback(function (string $sql) use (&$executed): int {
+            $executed[] = $sql;
+
+            return 1;
+        });
+
+        $command = new InspectEventsCommand(
+            $this->createStub(StreamReader::class),
+            $connection,
+            $this->createStub(EventTypeMapper::class),
+            new RecipeRegistry([]),
+            $this->clock(),
+            $this->createStub(StreamExistence::class),
+        );
+
+        $tester = new CommandTester($command);
+        $exit = $tester->execute(['--stream' => 'order-1', '--timeout' => $timeout, '--dump-sql' => true]);
+
+        // PostgreSQL refuses the SET with a raw driver error, so the refusal has to come first
+        $this->assertSame(Command::INVALID, $exit);
+        $this->assertStringContainsString(sprintf('Invalid --timeout "%s"', $timeout), $tester->getDisplay());
+        $this->assertEmpty($executed);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function timeoutsBeyondThePostgresRange(): iterable
+    {
+        // 2147484 seconds is 2147484000 ms, one second past the integer `statement_timeout` holds
+        yield 'one second past the ceiling' => ['2147484'];
+        yield 'saturating at PHP_INT_MAX' => ['99999999999999999999'];
+    }
+
+    #[Test]
+    public function the_largest_timeout_postgres_holds_is_applied(): void
+    {
+        $executed = [];
+        $connection = $this->createStub(Connection::class);
+        $connection->method('executeStatement')->willReturnCallback(function (string $sql) use (&$executed): int {
+            $executed[] = $sql;
+
+            return 1;
+        });
+
+        $command = new InspectEventsCommand(
+            $this->createStub(StreamReader::class),
+            $connection,
+            $this->createStub(EventTypeMapper::class),
+            new RecipeRegistry([]),
+            $this->clock(),
+            $this->createStub(StreamExistence::class),
+        );
+
+        $tester = new CommandTester($command);
+        $tester->execute(['--stream' => 'order-1', '--timeout' => '2147483', '--dump-sql' => true]);
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertContains('SET statement_timeout = 2147483000', $executed);
+    }
+
+    #[Test]
     public function normalizes_the_order_options_case(): void
     {
         $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
@@ -290,6 +403,19 @@ final class InspectEventsCommandTest extends TestCase
         // proof has to read the exact bound value rather than merely that it appears somewhere
         $this->assertSame(Command::SUCCESS, $exit);
         $this->assertStringContainsString(':wval0 = 1000', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function an_unbalanced_sql_fragment_is_refused_as_invalid(): void
+    {
+        // a fragment whose parentheses could close the generated wrapper is an operator error like any
+        // other refusal, reported with its reason, never an exception out of the console
+        $tester = new CommandTester($this->command());
+
+        $exit = $tester->execute(['--sql' => '(1 = 1', '--timeout' => '0', '--dump-sql' => true]);
+
+        $this->assertSame(Command::INVALID, $exit);
+        $this->assertStringContainsString('InspectFilter --sql fragment has unbalanced parentheses', $tester->getDisplay());
     }
 
     private function command(): InspectEventsCommand

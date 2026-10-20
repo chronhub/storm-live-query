@@ -41,7 +41,7 @@ final readonly class JsonRenderer implements EventRenderer
     }
 
     /**
-     * Render a PREBUILT document, so a run that also emits it through `--out` or the export port
+     * Render a prebuilt document, so a run that also emits it through `--out` or the export port
      * builds and flattens the rows once instead of once per target.
      *
      * @throws JsonException on a JSON encoding failure

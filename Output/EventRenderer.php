@@ -9,9 +9,10 @@ use Storm\Chronicler\Record\EventRecord;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Renders a stream of `EventRecord` values to a chosen format. Implementations consume the
- * iterable once, since it may be a lazy `Generator` from the store, so a streaming format can
- * write as it reads.
+ * Renders a stream of `EventRecord` values to a chosen format.
+ *
+ * Implementations consume the iterable once, since it may be a lazy `Generator` from the store, so
+ * a streaming format can write as it reads.
  *
  * @see \Storm\Chronicler\Record\EventRecord
  */

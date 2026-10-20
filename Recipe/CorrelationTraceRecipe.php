@@ -10,20 +10,22 @@ use Storm\Chronicler\Query\QueryFilter;
 
 /**
  * The reference recipe: every event carrying one of the given `__correlation_id`s, in `sequence_no`
- * order, across all streams. A named, documented preset over a fixed clause rather than over the
- * bound JSON path every other selector renders: the correlation path is a literal and only the ids
- * are bound, so `event_store_correlation_idx` serves it under a generic plan as under a custom one.
+ * order, across all streams.
  *
- * It traces the ids it is GIVEN, and claims nothing beyond them. A saga that spawns a child gives
+ * It is a named, documented preset over a fixed clause rather than over the bound JSON path every
+ * other selector renders: the correlation path is a literal and only the ids are bound, so
+ * `event_store_correlation_idx` serves it under a generic plan as under a custom one.
+ *
+ * It traces the ids it is given, and claims nothing beyond them. A saga that spawns a child gives
  * that child its own correlation id, so the child's footprint is a different id and this recipe
- * will not reach it from the parent's. That is not a gap to paper over here: coordination is an
+ * will not reach it from the parent's. The recipe leaves that to the caller: coordination is an
  * opt-in module this one does not depend on, and a preset that quietly meant a whole lineage
  * wherever sagas happen to be installed would mean two different things in two applications.
  *
  * The set form is how a lineage is traced: resolve it where it is known, `storm:saga:children`
  * walking a parent's tree, then pass the ids together.
  *
- * The recipe owns the PARSING and nothing else. What the ids mean as a query, the predicate, its
+ * The recipe owns the parsing and nothing else. What the ids mean as a query, the predicate, its
  * index-matching spelling and its order, belongs to `CorrelationFeedFilter` in the store's own
  * layer, where the index that serves it also lives; this class turns one operator-typed option into
  * that filter's set.

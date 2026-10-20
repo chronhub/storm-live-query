@@ -37,7 +37,7 @@ final class JsonRendererTest extends TestCase
     public function rendering_from_records_answers_the_same_document_as_the_prebuilt_path(): void
     {
         // the command prebuilds the document and calls renderDocument, so this renderer's own
-        // interface entry point is the one every OTHER consumer of EventRenderer arrives through.
+        // interface entry point is the one every other consumer of EventRenderer arrives through.
         // The two must not drift: a render() that dropped the veil or the type mapper would leak or
         // mislabel exactly where the command's tests never look
         $records = [$this->record(42, 'account-7'), $this->record(43, null)];

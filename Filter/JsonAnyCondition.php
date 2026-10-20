@@ -14,10 +14,10 @@ use function sprintf;
 use function str_contains;
 
 /**
- * A jsonb predicate matching a path against ANY of several values, the set form of a `JsonCondition`
+ * A jsonb predicate matching a path against any of several values, the set form of a `JsonCondition`
  * equality.
  *
- * It exists because some questions are a SET of ids rather than one, and a filter that only knows
+ * It exists because some queries target a set of ids rather than one, and a filter supporting only
  * `=` forces the caller into one query per id. The rendered SQL stays a plain equality against a
  * bound list, and the list is not what costs an index: `InspectFilter` renders the path itself as
  * `#>> string_to_array(:p, ',')`, a dynamic form an expression index serves only when the planner
@@ -25,9 +25,9 @@ use function str_contains;
  * misses regardless, the store's correlation index carrying the database collation rather than a
  * byte-ordered one.
  *
- * Deliberately NOT reachable from the `--where` grammar, whose operators are a closed set the
- * command parses itself: this carrier is for a recipe that composes its own predicate, so widening
- * it here widens no operator surface an operator types.
+ * Unreachable from the `--where` grammar, whose operators are a closed set parsed by the command: this
+ * carrier is for a recipe that composes its own predicate, so widening it here exposes no additional
+ * operator syntax to the CLI.
  *
  * @see InspectFilter the renderer
  * @see JsonCondition the scalar sibling
